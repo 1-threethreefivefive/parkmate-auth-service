@@ -117,20 +117,13 @@ public class AuthHostServiceImpl implements AuthHostService {
             throw new BaseException(ResponseStatus.INVALID_SETTLEMENT_CYCLE);
         }
 
-        boolean isVerified = redisService.verifyEmailCode(
-                hostRegisterRequestVo.getEmail(),
-                hostRegisterRequestVo.getVerificationCode(),
-                RoleType.HOST
-        );
-
-        if (!isVerified) {
-            throw new BaseException(ResponseStatus.INVALID_VERIFICATION_CODE);
+        if (!redisService.isVerifiedEmail(hostRegisterRequestVo.getEmail(), RoleType.HOST)) {
+            throw new BaseException(ResponseStatus.EMAIL_NOT_VERIFIED_HOST);
         }
 
         biznoVerificationService.verify(hostRegisterRequestVo.getBusinessRegistrationNumber());
 
         String hostUuid = UUIDGenerator.generateUUID();
-
         HostRegisterRequestDto hostRegisterRequestDto = HostRegisterRequestDto.from(hostRegisterRequestVo);
         AuthHost host = hostRegisterRequestDto.toEntity(hostUuid, passwordEncoder);
 
@@ -145,10 +138,10 @@ public class AuthHostServiceImpl implements AuthHostService {
                     hostUuid,
                     hostRegisterRequestVo
             );
-
             hostFeignClient.registerHost(feignDto);
 
             redisService.deleteVerificationCode(hostRegisterRequestVo.getEmail(), RoleType.HOST);
+            redisService.deleteVerifiedEmailStatus(hostRegisterRequestVo.getEmail(), RoleType.HOST);
 
         } catch (Exception e) {
             authHostRepository.deleteById(host.getId());
@@ -187,6 +180,7 @@ public class AuthHostServiceImpl implements AuthHostService {
         redisService.saveVerificationCode(email, code, Duration.ofMinutes(3), roleType);
     }
 
+    @Transactional
     @Override
     public boolean verifyEmailCode(String email, String code) {
 
@@ -206,6 +200,8 @@ public class AuthHostServiceImpl implements AuthHostService {
         }
 
         redisService.resetVerificationAttemptFailCount(email, RoleType.HOST);
+        redisService.setVerifiedEmailStatus(email, RoleType.HOST, Duration.ofMinutes(30));
+
         return true;
     }
 }
