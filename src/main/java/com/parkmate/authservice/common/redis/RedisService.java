@@ -23,6 +23,8 @@ public class RedisService {
     private static final String LOGIN_FAIL_PREFIX_USER = "login:fail:user:";
     private static final String LOGIN_FAIL_PREFIX_HOST = "login:fail:host:";
     private static final String REFRESH_TOKEN_PREFIX = "refresh:";
+    private static final String VERIFIED_EMAIL_PREFIX_USER = "email:verified:user:";
+    private static final String VERIFIED_EMAIL_PREFIX_HOST = "email:verified:host:";
 
     // ==================== TTL 설정 ====================
     private static final Duration LOGIN_FAIL_TTL = Duration.ofMinutes(15);
@@ -48,8 +50,23 @@ public class RedisService {
         return redisTemplate.opsForValue().get(buildEmailVerificationKey(email, roleType));
     }
 
+    public void setVerifiedEmailStatus(String email, RoleType roleType, Duration ttl) {
+        String key = buildVerifiedEmailKey(email, roleType);
+        redisTemplate.opsForValue().set(key, "true", ttl.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    public boolean isVerifiedEmail(String email, RoleType roleType) {
+        String key = buildVerifiedEmailKey(email, roleType);
+        String value = redisTemplate.opsForValue().get(key);
+        return "true".equals(value);
+    }
+
     public void deleteVerificationCode(String email, RoleType roleType) {
         redisTemplate.delete(buildEmailVerificationKey(email, roleType));
+    }
+
+    public void deleteVerifiedEmailStatus(String email, RoleType roleType) {
+        redisTemplate.delete(buildVerifiedEmailKey(email, roleType));
     }
 
     // ==================== 인증 시도 실패 및 차단 관리 ====================
@@ -122,5 +139,9 @@ public class RedisService {
 
     private String buildRefreshTokenKey(String userUuid) {
         return REFRESH_TOKEN_PREFIX + userUuid;
+    }
+
+    private String buildVerifiedEmailKey(String email, RoleType roleType) {
+        return (roleType == RoleType.HOST ? VERIFIED_EMAIL_PREFIX_HOST : VERIFIED_EMAIL_PREFIX_USER) + email.trim();
     }
 }

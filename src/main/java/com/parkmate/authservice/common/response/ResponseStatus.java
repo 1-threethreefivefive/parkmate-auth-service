@@ -29,6 +29,8 @@ public enum ResponseStatus {
     // ❌ 401: 인증 오류
     INVALID_AUTH_PASSWORD(HttpStatus.UNAUTHORIZED, false, 401, "비밀번호가 일치하지 않습니다."),
     AUTH_VERIFICATION_FAILED(HttpStatus.UNAUTHORIZED, false, 401, "이메일 인증에 실패하였습니다."),
+    EMAIL_NOT_VERIFIED_HOST(HttpStatus.UNAUTHORIZED, false, 401, "호스트 이메일 인증이 완료되지 않았습니다."),
+    EMAIL_NOT_VERIFIED(HttpStatus.UNAUTHORIZED, false, 401, "이메일 인증이 완료되지 않았습니다."),
     AUTH_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, false, 401, "토큰이 만료되었습니다."),
     AUTH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, false, 401, "유효하지 않은 토큰입니다."),
     AUTH_LOGIN_FAILED_TOO_MANY_TIMES(HttpStatus.UNAUTHORIZED, false, 401, "로그인 시도 횟수가 초과되었습니다."),

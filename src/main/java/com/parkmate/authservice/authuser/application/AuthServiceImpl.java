@@ -104,28 +104,34 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     @Override
     public void register(UserRegisterRequestDto userRegisterRequestDto, UserRegisterRequestVo userRegisterRequestVo) {
-        boolean isVerified = redisService.verifyEmailCode(
-                userRegisterRequestDto.getEmail(),
-                userRegisterRequestVo.getVerificationCode(),
-                RoleType.USER
-        );
 
-        if (!isVerified) {
-            throw new BaseException(ResponseStatus.INVALID_VERIFICATION_CODE);
+        String email = userRegisterRequestDto.getEmail();
+
+        // 1. 이메일 인증 상태 확인 (3분 코드 검증 아님, 사전 인증 성공 여부 확인)
+        if (!redisService.isVerifiedEmail(email, RoleType.USER)) {
+            throw new BaseException(ResponseStatus.EMAIL_NOT_VERIFIED); // 인증되지 않은 이메일
         }
 
+        // 2. 사용자 UUID 생성 및 엔티티 변환
         String userUuid = UUIDGenerator.generateUUID();
         AuthUser newUser = userRegisterRequestDto.toEntity(userUuid, passwordEncoder);
 
         try {
+            // 3. AuthUser 저장
             authRepository.save(newUser);
+
+            // 4. UserService 등록 요청 (FeignClient)
             UserRegisterRequestForUserServiceDto dto = UserRegisterRequestForUserServiceDto.of(
                     userUuid,
                     userRegisterRequestVo.getName(),
                     userRegisterRequestVo.getPhoneNumber()
             );
             userFeignClient.registerUser(dto);
-            redisService.deleteVerificationCode(userRegisterRequestDto.getEmail(), RoleType.USER);
+
+            // 5. 인증 관련 Redis 키 삭제 (정리)
+            redisService.deleteVerificationCode(email, RoleType.USER);           // 인증 코드 삭제
+            redisService.deleteVerifiedEmailStatus(email, RoleType.USER);        // 인증 상태 삭제
+
         } catch (DataIntegrityViolationException e) {
             String message = e.getMostSpecificCause() != null ? e.getMostSpecificCause().getMessage() : "";
             if (message.contains("UK_auth_user_email")) {
@@ -134,6 +140,7 @@ public class AuthServiceImpl implements AuthService {
                 throw new BaseException(ResponseStatus.INTERNAL_SERVER_ERROR);
             }
         } catch (Exception e) {
+            // UserService 등록 실패 시 rollback: authUser 삭제
             authRepository.deleteById(newUser.getId());
             throw new BaseException(ResponseStatus.AUTH_USER_REGISTER_FAILED);
         }
@@ -208,6 +215,9 @@ public class AuthServiceImpl implements AuthService {
         }
 
         redisService.resetVerificationAttemptFailCount(email, roleType);
+
+        redisService.setVerifiedEmailStatus(email, roleType, Duration.ofMinutes(30));
+
         return true;
     }
 
